@@ -8,6 +8,12 @@ jobs:
   run-pipeline:
     runs-on: ubuntu-latest
 
+
+    # KEY FIX: Explicitly grant write access to contents and pull requests
+    permissions:
+      contents: write
+      pull-requests: write
+
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
