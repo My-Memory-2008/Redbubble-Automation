@@ -1,0 +1,48 @@
+name: Print On Demand Autopilot
+
+on:
+
+  workflow_dispatch:   # Allows manual click-to-run testing
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize Environment Variables
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies
+        run: |
+          pip install requests beautifulsoup4 playwright
+          playwright install chromium
+
+      - name: Spin Up Local Perplexica Core
+        run: |
+          git clone https://github.com perplexica-core
+          cd perplexica-core
+          cp sample.config.toml config.toml
+          docker compose up -d
+          echo "Waiting for search core to stabilize..."
+          sleep 35
+
+      - name: Execute Automation Script
+        env:
+          CF_CLEARANCE: ${{ secrets.CF_CLEARANCE }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python main.py
+
+      - name: Push Generated Assets to Github Repo
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          git add history.txt trend_images/ generated_images/
+          git diff-index --quiet HEAD || git commit -m "Sync Pipeline: Committed fresh designs and SEO logs"
+          git push origin main
