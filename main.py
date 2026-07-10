@@ -47,10 +47,11 @@ def run_perplexica_search():
     except Exception:
         return "Trend: Retro Cyberpunk | Prompt: Vaporwave aesthetic vector t-shirt design"
 
-def generate_perchance_image(image_prompt, cf_token):
-    """Uses Playwright to correctly target the inner Perchance generator iframe, 
 
-    bypasses obstacles using your token, and downloads the output asset.
+def generate_perchance_image(image_prompt, cf_token):
+    """Uses Playwright to interact directly with the main Perchance page layouts,
+
+    bypassing iframe dependencies to avoid visibility timeouts.
     """
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -58,11 +59,11 @@ def generate_perchance_image(image_prompt, cf_token):
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
         )
         context = browser.new_context(
-            viewport={"width": 1280, "height": 800},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            viewport={"width": 1280, "height": 1000},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         )
         
-        # Inject cookie state 
+        # Inject cookie token to bypass Cloudflare gates smoothly
         context.add_cookies([{
             "name": "cf_clearance",
             "value": cf_token,
@@ -71,56 +72,41 @@ def generate_perchance_image(image_prompt, cf_token):
         }])
         
         page = context.new_page()
-        print("Navigating to Perchance generator interface...")
+        print("Navigating directly to Perchance user interface...")
         page.goto("https://perchance.org", wait_until="networkidle")
         
-        # STEP 1: Locate and attach to the primary interaction iframe element
-        print("Scanning for the interactive generation frame elements...")
-        page.wait_for_selector("iframe", timeout=20000)
+        # STEP 1: Target the main-page element input arrays directly
+        print("Locating text prompt areas on main body layer...")
         
-        # Target the specific platform generator frame
-        generator_frame = None
-        for frame in page.frames:
-            if "ai-text-to-image-generator" in frame.url or "perchance" in frame.url:
-                generator_frame = frame
-                break
-                
-        # Fallback to the first available content frame if named URL routing differs
-        if not generator_frame and len(page.frames) > 1:
-            generator_frame = page.frames[1]
-        elif not generator_frame:
-            generator_frame = page.main_frame
-
-        print("Frame isolated. Interacting with input targets inside the frame context...")
+        # A resilient selector that catches naked textareas, textareas by ID, or textareas by custom placeholders
+        input_selector = "textarea, #prompt-input, textarea[placeholder*='prompt'], [contenteditable='true']"
+        page.wait_for_selector(input_selector, timeout=25000)
         
-        # STEP 2: Use highly descriptive fallback combinations to find the prompt area
-        # This checks for placeholders, generic inputs, or textareas inside the isolated frame
-        input_selector = "textarea, input[placeholder*='prompt'], [contenteditable='true']"
-        generator_frame.wait_for_selector(input_selector, timeout=25000)
+        # Clear out default placeholder examples and enter our fresh trend prompt
+        page.focus(input_selector)
+        page.fill(input_selector, "")
+        page.type(input_selector, image_prompt, delay=40)
+        print(f"Prompt successfully written: {image_prompt}")
         
-        # Clear out existing template text and type the fresh trend prompt
-        generator_frame.focus(input_selector)
-        generator_frame.fill(input_selector, "")
-        generator_frame.type(input_selector, image_prompt, delay=50)
+        # STEP 2: Find and trigger the generation action button on the main layout
+        button_selector = "button:has-text('Generate'), button:has-text('generate'), button[id*='generate']"
+        page.wait_for_selector(button_selector, timeout=10000)
+        page.click(button_selector)
+        print("Generation initialized. Waiting for image canvas processing...")
         
-        # STEP 3: Click the target generation trigger
-        button_selector = "button:has-text('Generate'), button:has-text('generate'), #generate-button"
-        generator_frame.wait_for_selector(button_selector, timeout=10000)
-        generator_frame.click(button_selector)
-        print("Generation triggered successfully. Compiling image output...")
+        # STEP 3: Wait for the compiled output image asset to generate an address
+        # Perchance dynamically updates the internal img tag once rendering is complete
+        output_img_selector = "div.output-image-container img, img[src*='perchance'], #output img, .image-container img"
+        page.wait_for_selector(output_img_selector, timeout=60000)
         
-        # STEP 4: Wait for the image tag to compile down to a viewable source file
-        output_img_selector = "div.output-image-container img, img[src*='perchance'], #output img"
-        generator_frame.wait_for_selector(output_img_selector, timeout=60000)
-        
-        img_element = generator_frame.locator(output_img_selector).first
+        img_element = page.locator(output_img_selector).first
         img_src = img_element.get_attribute("src")
         
         if not img_src:
-            raise Exception("Failed to scrape valid image source attribute from frame output grid.")
+            raise Exception("Failed to find a valid image source address inside the DOM output grid.")
 
-        # Download the completed design file asset
-        print(f"Downloading finished design asset from source link: {img_src}")
+        # STEP 4: Download and save the final design asset 
+        print(f"Downloading finished design asset: {img_src}")
         headers = {"User-Agent": "Mozilla/5.0"}
         img_data = requests.get(img_src, headers=headers, timeout=20).content
         
@@ -128,8 +114,10 @@ def generate_perchance_image(image_prompt, cf_token):
         with open(filename, "wb") as f:
             f.write(img_data)
         
+        print(f"Success! Image saved to: {filename}")
         browser.close()
         return filename
+        
 def generate_seo_metadata(trend_name):
     """Generates optimized Redbubble tags and descriptions."""
     tags = f"{trend_name.lower().replace(' ', ', ')}, funny t-shirt, viral meme, trending design"
