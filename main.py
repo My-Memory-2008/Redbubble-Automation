@@ -49,9 +49,9 @@ def run_perplexica_search():
 
 
 def generate_perchance_image(image_prompt, cf_token):
-    """Uses a Network Event Monitoring system to track background API requests
+    """Combines Network Event Monitoring with JavaScript DOM injection to generate images
 
-    and download the generated image directly from the network stream, eliminating timeouts.
+    without requiring elements to be physically visible or actionable by Playwright's UI layer.
     """
     from playwright.sync_api import sync_playwright
 
@@ -75,69 +75,96 @@ def generate_perchance_image(image_prompt, cf_token):
         
         page = context.new_page()
         
-        # Containers to store image data caught from network events
+        # Container to catch image streams from network events
         captured_image_data = {"bytes": None, "ext": "jpg"}
 
-        # -------------------------------------------------------------
-        # NETWORK EVENT MONITOR: Intercepts background api traffic
-        # -------------------------------------------------------------
+        # NETWORK EVENT MONITOR
         def handle_network_response(response):
             try:
                 url = response.url.lower()
                 content_type = response.headers.get("content-type", "").lower()
                 
-                # Monitor for image payloads coming from perchance text-to-image systems
-                if "image" in content_type or "verification-server" in url or "generate" in url:
+                # Intercept image streams. We ignore initial load images by checking the active prompt loop
+                if "image" in content_type or "verification" in url or "generate" in url:
                     if response.status == 200:
                         body = response.body()
-                        # Verify the network packet contains actual image data bytes
-                        if len(body) > 5000:  # Ignore tiny tracker icons/pixels
+                        if len(body) > 15000:  # Skip tiny interface icons or background textures
                             captured_image_data["bytes"] = body
                             if "png" in content_type:
                                 captured_image_data["ext"] = "png"
-                            print(f"[Event Monitor] Caught target image asset from network stream! Size: {len(body)} bytes")
+                            print(f"[Event Monitor] Caught fresh design from network! Size: {len(body)} bytes")
             except Exception:
-                pass # Prevent background logs from muddying up the pipeline terminal
+                pass
 
-        # Register our event monitor listener onto the page network channel
         page.on("response", handle_network_response)
-        # -------------------------------------------------------------
 
-        print("Navigating to Perchance application endpoint...")
+        print("Navigating to Perchance app canvas...")
         page.goto("https://perchance.org", wait_until="commit")
         
-        # Target elements instantly by focusing on the layout tags
-        input_selector = "textarea#input, textarea, #prompt-input"
-        page.locator(input_selector).first.focus()
-        page.locator(input_selector).first.fill("")
-        page.locator(input_selector).first.type(image_prompt, delay=20)
-        print(f"Prompt injected via DOM focus: {image_prompt}")
+        # Let the underlying scripts execute for 3 seconds
+        page.wait_for_timeout(3000)
+
+        # Clear out any previous image data caught during the initial webpage loading phase
+        captured_image_data["bytes"] = None
+
+        # -------------------------------------------------------------
+        # JAVASCRIPT INJECTION: Target hidden DOM layers directly
+        # -------------------------------------------------------------
+        print("Injecting script to input prompt text and trigger generation...")
         
-        button_selector = "button#generate-button, button:has-text('Generate'), button"
+        js_injection = f"""
+        () => {{
+            // 1. Locate the input target anywhere on the active frame layer
+            let inputEl = document.querySelector('textarea#input') || 
+                          document.querySelector('textarea') || 
+                          document.getElementById('input');
+                          
+            if (inputEl) {{
+                inputEl.value = {json.dumps(image_prompt)};
+                // Dispatch input events to trigger internal React/Vue framework listeners
+                inputEl.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                inputEl.dispatchEvent(new Event('change', {{ bubbles: true }}));
+            }} else {{
+                return "Input field not found in DOM";
+            }}
+            
+            // 2. Locate and trigger the generate action trigger element
+            let btnEl = document.getElementById('generate-button') || 
+                        document.querySelector("button") ||
+                        document.querySelector("[id*='generate']");
+                        
+            if (btnEl) {{
+                btnEl.click();
+                return "Success";
+            }} else {{
+                return "Generation button not found in DOM";
+            }}
+        }}
+        """
         
-        # Trigger the click and monitor the network events loop
-        print("Triggering design generation. Event monitor is watching network streams...")
-        page.locator(button_selector).first.click()
+        # Execute the code block directly inside the browser instance
+        execution_status = page.evaluate(js_injection)
+        print(f"[JS Injector Status] Code execution result: {execution_status}")
+        # -------------------------------------------------------------
         
-        # Loop smoothly without fixed timeouts until the network listener catches the image asset
+        # Loop efficiently until our network listener intercepts the new image binary
+        print("Monitoring network stream for newly generated image data...")
         attempts = 0
         while captured_image_data["bytes"] is None and attempts < 120:
-            page.wait_for_timeout(500) # Check the network cache every 0.5 seconds
+            page.wait_for_timeout(500)
             attempts += 1
 
         browser.close()
 
-        # Step 4: Verify and process the data intercepted by the event monitor
+        # Save and return file parameters if caught successfully
         if captured_image_data["bytes"]:
             filename = f"{GEN_DIR}/design_{random.randint(1000,9999)}.{captured_image_data['ext']}"
             with open(filename, "wb") as f:
                 f.write(captured_image_data["bytes"])
-            print(f"Success! Image intercepted and saved via Network Monitoring to: {filename}")
+            print(f"Success! New asset saved via JS + Network Monitoring to: {filename}")
             return filename
         else:
-            print("[Event Monitor Error] Generation finished but no image stream was found. Falling back to default layout scrape.")
-            # Fallback layout scrape code if background APIs are completely masked
-            return f"{GEN_DIR}/fallback_placeholder.jpg"
+            raise Exception("Network monitor did not capture any generation events within the designated timeframe.")
         
 def generate_seo_metadata(trend_name):
     """Generates optimized Redbubble tags and descriptions."""
