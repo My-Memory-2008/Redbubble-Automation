@@ -21,8 +21,7 @@ jobs:
 
       - name: Install System Dependencies
         run: |
-          pip install requests beautifulsoup4 playwright
-          playwright install chromium
+          pip install requests pillow
 
       - name: Spin Up Local Perplexica Core
         run: |
@@ -67,6 +66,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@://github.com"
-          git add history.txt trend_images/ generated_images/
-          git diff-index --quiet HEAD || git commit -m "Sync Pipeline: Committed fresh designs and SEO logs"
+          git add history.txt generated_images/
+          git diff-index --quiet HEAD || git commit -m "Sync Pipeline: Committed fresh local designs and SEO logs"
           git push origin main
