@@ -26,12 +26,36 @@ jobs:
 
       - name: Spin Up Local Perplexica Core
         run: |
+          # 1. Clone the correct repository
           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
           cd perplexica-core
-          cp sample.config.toml config.toml
+          
+          # 2. Dynamically create a working configuration file directly from the terminal
+          cat << 'EOF' > config.toml
+          [GENERAL]
+          PORT = 3001
+          ENV = "production"
+
+          [API_KEYS]
+          OPENAI = ""
+          GROQ = ""
+
+          [SEARXNG]
+          URL = "http://localhost:8080"
+          EOF
+          
+          # Also create a yaml variant just in case the backend looks for a YAML format
+          cat << 'EOF' > config.yaml
+          port: 3001
+          env: "production"
+          searxng_url: "http://localhost:8080"
+          EOF
+
+          # 3. Fire up the background containers
           docker compose up -d
+          
           echo "Waiting for search core to stabilize..."
-          sleep 35
+          sleep 45
 
       - name: Execute Automation Script
         env:
