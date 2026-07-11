@@ -159,27 +159,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Fire up Isolated SearXNG Engine
-        run: |
-          # Create settings structure to disable rate limits completely for the runner
-          mkdir -p searxng
-          cat << 'EOF' > searxng/settings.yml
-          search:
-            formats:
-              - html
-          bot_detection:
-            ip_limit:
-              link_token: false
-              block_ip: false
-          EOF
-
-          # Launch the standalone image on host mode network structures to prevent "connection refused" hooks
-          docker run -d --network host --name local-searxng-gateway \
-            -v $(pwd)/searxng:/etc/searxng \
-            searxng/searxng:latest
-            
-          echo "SearXNG localized core engine initialized. Waiting for boot array sequence..."
-          sleep 20
 
       - name: Run Downloader Script
         run: python fetch_trends.py
