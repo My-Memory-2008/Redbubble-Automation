@@ -109,18 +109,19 @@ jobs:
           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
            cd perplexica-core
           
-          # Inject clean environment files straight from the terminal
+          # Inject configurations targeting port 3000
           cat << 'EOF' > config.toml
           [GENERAL]
-          PORT = 3001
+          PORT = 3000
           ENV = "production"
+          
           [SEARXNG]
           URL = "http://localhost:8080"
           EOF
           
           docker compose up -d
-          echo "Waiting for background search engines to initialize..."
-          sleep 45
+          echo "Waiting for Next.js API core routing endpoints to load..."
+          sleep 50
 
       - name: Run Dynamic Trend Search Agent
         run: python search_agent.py
@@ -128,7 +129,7 @@ jobs:
       - name: Push History Logs to Repository Branch
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add history.txt
           git diff-index --quiet HEAD || git commit -m "Sync Loop: Saved brand new trending topic parameters"
           git push origin main
