@@ -109,10 +109,11 @@ jobs:
           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
            cd perplexica-core
           
-          # Inject configurations targeting port 3000
+          # Inject configurations ensuring accurate port exposure mappings
           cat << 'EOF' > config.toml
           [GENERAL]
           PORT = 3000
+          API_PORT = 3001
           ENV = "production"
           
           [SEARXNG]
@@ -120,8 +121,7 @@ jobs:
           EOF
           
           docker compose up -d
-          echo "Waiting for Next.js API core routing endpoints to load..."
-          sleep 50
+          echo "Docker container maps initialized. Handing execution over to python verification loops..."
 
       - name: Run Dynamic Trend Search Agent
         run: python search_agent.py
