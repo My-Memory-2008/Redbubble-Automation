@@ -1,18 +1,94 @@
-name: Print On Demand Autopilot
+# name: Print On Demand Autopilot
+
+# on:
+
+#   workflow_dispatch:   # Allows manual click-to-run testing
+
+# jobs:
+#   run-pipeline:
+#     runs-on: ubuntu-latest
+
+
+#     # KEY FIX: Explicitly grant write access to contents and pull requests
+#     permissions:
+#       contents: write
+#       pull-requests: write
+
+#     steps:
+#       - name: Checkout Code Repository
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+
+#       - name: Initialize Environment Variables
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.10'
+
+#       - name: Install System Dependencies
+#         run: |
+#           pip install requests pillow
+
+#       - name: Spin Up Local Perplexica Core
+#         run: |
+#           # 1. Clone the correct repository
+#           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
+#           cd perplexica-core
+          
+#           # 2. Dynamically create a working configuration file directly from the terminal
+#           cat << 'EOF' > config.toml
+#           [GENERAL]
+#           PORT = 3001
+#           ENV = "production"
+
+#           [API_KEYS]
+#           OPENAI = ""
+#           GROQ = ""
+
+#           [SEARXNG]
+#           URL = "http://localhost:8080"
+#           EOF
+          
+#           # Also create a yaml variant just in case the backend looks for a YAML format
+#           cat << 'EOF' > config.yaml
+#           port: 3001
+#           env: "production"
+#           searxng_url: "http://localhost:8080"
+#           EOF
+
+#           # 3. Fire up the background containers
+#           docker compose up -d
+          
+#           echo "Waiting for search core to stabilize..."
+#           sleep 45
+
+#       - name: Execute Automation Script
+#         env:
+#           CF_CLEARANCE: ${{ secrets.CF_CLEARANCE }}
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         run: python main.py
+
+#       - name: Push Generated Assets to Github Repo
+#         run: |
+#           git config --global user.name "github-actions[bot]"
+#           git config --global user.email "41898282+github-actions[bot]@://github.com"
+#           git add history.txt generated_images/
+#           git diff-index --quiet HEAD || git commit -m "Sync Pipeline: Committed fresh local designs and SEO logs"
+#           git push origin main
+
+
+
+name: Perplexica Unique Trend Discovery
 
 on:
-
-  workflow_dispatch:   # Allows manual click-to-run testing
+ workflow_dispatch:     # Allows you to click "Run workflow" to test it manually
 
 jobs:
-  run-pipeline:
+  discover-trends:
     runs-on: ubuntu-latest
-
-
-    # KEY FIX: Explicitly grant write access to contents and pull requests
+    
     permissions:
       contents: write
-      pull-requests: write
 
     steps:
       - name: Checkout Code Repository
@@ -20,58 +96,39 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Initialize Environment Variables
+      - name: Set up Python Environment
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install System Dependencies
-        run: |
-          pip install requests pillow
+      - name: Install Network Requirements
+        run: pip install requests
 
       - name: Spin Up Local Perplexica Core
         run: |
-          # 1. Clone the correct repository
-          git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
+          git clone https://github.com perplexica-core
           cd perplexica-core
           
-          # 2. Dynamically create a working configuration file directly from the terminal
+          # Inject clean environment files straight from the terminal
           cat << 'EOF' > config.toml
           [GENERAL]
           PORT = 3001
           ENV = "production"
-
-          [API_KEYS]
-          OPENAI = ""
-          GROQ = ""
-
           [SEARXNG]
           URL = "http://localhost:8080"
           EOF
           
-          # Also create a yaml variant just in case the backend looks for a YAML format
-          cat << 'EOF' > config.yaml
-          port: 3001
-          env: "production"
-          searxng_url: "http://localhost:8080"
-          EOF
-
-          # 3. Fire up the background containers
           docker compose up -d
-          
-          echo "Waiting for search core to stabilize..."
+          echo "Waiting for background search engines to initialize..."
           sleep 45
 
-      - name: Execute Automation Script
-        env:
-          CF_CLEARANCE: ${{ secrets.CF_CLEARANCE }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python main.py
+      - name: Run Dynamic Trend Search Agent
+        run: python search_agent.py
 
-      - name: Push Generated Assets to Github Repo
+      - name: Push History Logs to Repository Branch
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@://github.com"
-          git add history.txt generated_images/
-          git diff-index --quiet HEAD || git commit -m "Sync Pipeline: Committed fresh local designs and SEO logs"
+          git add history.txt
+          git diff-index --quiet HEAD || git commit -m "Sync Loop: Saved brand new trending topic parameters"
           git push origin main
