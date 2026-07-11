@@ -139,9 +139,8 @@
 name: Local Perplexica Trend Downloader
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
+  
+  workflow_dispatch: # Allows manual trigger click
 
 jobs:
   run-bot:
@@ -155,31 +154,10 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
+      - name: Install System Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
-
-      - name: Launch Standalone Search Engine Gateway
-        run: |
-          mkdir -p searxng
-          cat << 'EOF' > searxng/settings.yml
-          search:
-            formats:
-              - html
-              - json
-          bot_detection:
-            ip_limit:
-              link_token: false
-              block_ip: false
-          EOF
-
-          docker run -d -p 8080:8080 --name independent-searxng \
-            -v $(pwd)/searxng:/etc/searxng \
-            searxng/searxng:latest
-            
-          echo "Engine containers deployed. Allowing operational adapters to settle..."
-          sleep 15
+          pip install requests duckduckgo_search
 
       - name: Run Downloader Script
         run: python fetch_trends.py
@@ -189,5 +167,4 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           git add history.txt downloaded_images/current_trend.jpg
-          # This forces a push if history.txt or the content of the image changes
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Overwrote trend reference image" && git push)
