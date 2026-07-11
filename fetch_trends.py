@@ -2,12 +2,11 @@ import os
 import time
 import random
 import requests
+from duckduckgo_search import DDGS
 
 HISTORY_FILE = "history.txt"
 IMAGE_FOLDER = "downloaded_images"
-# Fixed filename so that it overwrites every single time
 OUTPUT_FILENAME = f"{IMAGE_FOLDER}/current_trend.jpg"
-SEARXNG_API_URL = "http://localhost:8080/search"
 
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
 
@@ -22,61 +21,55 @@ def save_to_history(search_term):
         f.write(f"{search_term}\n")
 
 def get_target_trends():
-    platforms = ["redbubble", "etsy", "teepublic", "amazon best sellers", "pinterest trend"]
-    niches = ["retro logo design", "funny typography poster", "minimalist aesthetic graphic", "vintage vector art"]
+    # Covers every source platform you requested
+    platforms = ["redbubble", "etsy", "teepublic", "amazon best sellers", "pinterest trend", "insightfactory", "kitto"]
+    niches = ["retro logo design", "funny typography poster", "minimalist aesthetic graphic", "vintage vector art", "trending design layout"]
     return f"trending {random.choice(platforms)} {random.choice(niches)}"
 
 def run_automation_workflow():
     history = load_history()
-    max_pipeline_attempts = 5
+    max_pipeline_attempts = 10
     
-    for _ in range(max_pipeline_attempts):
-        search_query = get_target_trends()
-        
-        if search_query in history:
-            continue
+    # Initialize the high-speed search extraction matrix
+    with DDGS() as ddgs:
+        for _ in range(max_pipeline_attempts):
+            search_query = get_target_trends()
             
-        print(f"Querying search layer directly for: '{search_query}'")
-        
-        params = {
-            "q": search_query,
-            "format": "json",
-            "categories": "images"
-        }
-        
-        try:
-            response = requests.get(SEARXNG_API_URL, params=params, timeout=20)
-            if response.status_code != 200:
-                print(f"Engine rejected query (Status {response.status_code}). Advancing loop...")
+            if search_query in history:
                 continue
                 
-            results = response.json().get("results", [])
-            if not results:
-                print("No image data found for this keyword phrase. Retrying...")
-                continue
-                
-            for image_metadata in results:
-                image_url = image_metadata.get("img_src") or image_metadata.get("url")
-                
-                if image_url and any(image_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
-                    print(f"Discovered matching design link: {image_url}")
+            print(f"Querying unblocked engine matrix for: '{search_query}'")
+            
+            try:
+                # Direct image extraction targeting active layouts
+                results = list(ddgs.images(search_query, max_results=10))
+                if not results:
+                    print("No image data found for this keyword phrase. Advancing loop...")
+                    continue
                     
-                    # Request the actual image bytes safely
-                    img_response = requests.get(image_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-                    if img_response.status_code == 200:
+                for image_metadata in results:
+                    image_url = image_metadata.get("image")
+                    
+                    if image_url and any(image_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                        print(f"Discovered matching production reference asset: {image_url}")
                         
-                        # Overwrites 'current_trend.jpg' instantly on every successful execution
-                        with open(OUTPUT_FILENAME, 'wb') as file_handler:
-                            file_handler.write(img_response.content)
+                        # Request the actual image bytes using standard browser impersonation
+                        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                        img_response = requests.get(image_url, timeout=15, headers=headers)
+                        
+                        if img_response.status_code == 200:
+                            # Overwrites the target file instantly
+                            with open(OUTPUT_FILENAME, 'wb') as file_handler:
+                                file_handler.write(img_response.content)
+                                
+                            save_to_history(search_query)
+                            print(f"Successfully downloaded and overwrote trend file: {OUTPUT_FILENAME}")
+                            return True
                             
-                        save_to_history(search_query)
-                        print(f"Successfully downloaded and overwrote asset: {OUTPUT_FILENAME}")
-                        return True
-                        
-        except Exception as error:
-            print(f"Loop error encounter: {error}")
-            time.sleep(2)
-            
+            except Exception as error:
+                print(f"Skipping volatile network point: {error}")
+                time.sleep(2)
+                
     print("Automation loop exhausted without tracking any new content today.")
     return False
 
