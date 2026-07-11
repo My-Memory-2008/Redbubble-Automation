@@ -1,15 +1,31 @@
 import os
+import time
 import requests
-import json
 from datetime import datetime
 
-# Configuration
 HISTORY_FILE = "history.txt"
 IMAGE_FOLDER = "downloaded_images"
-# Replace with your Perplexica or fallback Search API endpoint
-API_URL = os.getenv("PERPLEXICA_API_URL", "http://localhost:3001/api/search") 
+LOCAL_PERPLEXICA_API = "http://localhost:3001/api/search"
+LOCAL_HEALTH_CHECK = "http://localhost:3001/api/status" # Adjust if your version uses a different health endpoint
 
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
+
+def wait_for_perplexica(timeout_seconds=120):
+    """Loops and verifies if the local Perplexica container is awake before querying."""
+    print("Waiting for local Perplexica container to initialize...")
+    start_time = time.time()
+    while time.time() - start_time < timeout_seconds:
+        try:
+            # Fallback to checking the base port if /status isn't configured
+            response = requests.get("http://localhost:3001", timeout=5)
+            if response.status_code < 500:
+                print("Perplexica Core is up and responding!")
+                return True
+        except requests.exceptions.ConnectionError:
+            pass
+        time.sleep(5)
+    print("Timeout: Perplexica Core failed to start in time.")
+    return False
 
 def load_history():
     if not os.path.exists(HISTORY_FILE):
@@ -21,99 +37,94 @@ def save_to_history(search_term):
     with open(HISTORY_FILE, "a", encoding="utf-8") as f:
         f.write(f"{search_term}\n")
 
-def fetch_trending_term():
-    """
-    Asks the AI engine to find a trending Print-on-Demand (POD) product design topic.
-    """
-    prompt = (
-        "Identify one highly specific trending design, logo, poster, or product topic "
-        "currently popular or best-selling on platforms like Redbubble, Etsy, Amazon Best Sellers, "
-        "Teepublic, Pinterest, and Google Trends. Return ONLY the name of the trend/phrase, "
-        "nothing else. Do not include quotes."
-    )
-    
+def get_trends_from_engine():
+    """Queries the local search stack for trending structural keywords."""
+    prompt = "trending designs redbubble teepublic etsy amazon best sellers pinterest posters logos"
     payload = {
         "query": prompt,
-        "focusMode": "webSearch" # Adjust based on Perplexica's specific API documentation
+        "focusMode": "webSearch"
     }
-    
     try:
-        response = requests.post(API_URL, json=payload, timeout=30)
-        if response.status_code == 200:
-            # Adjust JSON parsing depending on your Perplexica API response structure
-            trend = response.json().get("text", "").strip()
-            return trend
+        res = requests.post(LOCAL_PERPLEXICA_API, json=payload, timeout=30)
+        if res.status_code == 200:
+            data = res.json()
+            # Extract names from metadata sources fetched by the engine
+            sources = data.get("sources", [])
+            for source in sources:
+                title = source.get("title", "").strip()
+                if title:
+                    # Clean up string to serve as a keyword phrase
+                    short_title = " ".join(title.split()[:4])
+                    return short_title
         return None
     except Exception as e:
-        print(f"Error fetching trend from AI: {e}")
+        print(f"Error querying search layer: {e}")
         return None
 
-def download_image(search_term):
-    """
-    Searches for an image URL for the specific term and downloads it.
-    """
-    print(f"Searching image for: {search_term}")
-    
-    # Querying for an image link using the search backend
-    image_query = f"{search_term} trending design product photo"
-    payload = {"query": image_query, "focusMode": "webSearch"}
-    
+def download_trend_image(keyword):
+    print(f"Attempting to discover unique image reference for: {keyword}")
+    payload = {
+        "query": f"{keyword} product image design filetype:jpg",
+        "focusMode": "webSearch"
+    }
     try:
-        res = requests.post(API_URL, json=payload, timeout=30)
-        # Assuming the AI engine returns source links in the response
-        data = res.json()
-        
-        # Fallback/Target: Extract the first image link from the search engine's context metadata
-        sources = data.get("sources", [])
+        res = requests.post(LOCAL_PERPLEXICA_API, json=payload, timeout=30)
+        if res.status_code != 200:
+            return False
+            
+        sources = res.json().get("sources", [])
         image_url = None
         
-        for source in sources:
-            url = source.get("url", "")
-            if url.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+        # Look for images indexed by the local crawler engine
+        for src in sources:
+            url = src.get("url", "")
+            if any(url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png"]):
                 image_url = url
                 break
-        
-        if not image_url:
-            print("No direct image URL found in sources. Skipping.")
-            return False
-
-        # Download the image
-        img_res = requests.get(image_url, stream=True, timeout=15)
-        if img_res.status_code == 200:
-            clean_name = "".join(c for c in search_term if c.isalnum() or c in (' ', '_')).rstrip()
-            filename = f"{IMAGE_FOLDER}/{clean_name.replace(' ', '_')}_{int(datetime.timestamp(datetime.now()))}.jpg"
+                
+        if not image_url and sources:
+            # Fallback strategy: download target page imagery if direct resource link isn't parsed
+            image_url = sources[0].get("url")
             
-            with open(filename, 'wb') as f:
-                for chunk in img_res.iter_content(1024):
-                    f.write(chunk)
-            print(f"Successfully downloaded: {filename}")
-            return True
-            
+        if image_url:
+            img_res = requests.get(image_url, stream=True, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            if img_res.status_code == 200:
+                clean_name = "".join(c for c in keyword if c.isalnum() or c in (' ', '_')).rstrip()
+                filename = f"{IMAGE_FOLDER}/{clean_name.replace(' ', '_')}_{int(time.time())}.jpg"
+                with open(filename, 'wb') as f:
+                    for chunk in img_res.iter_content(1024):
+                        f.write(chunk)
+                print(f"Saved reference design image: {filename}")
+                return True
+        return False
     except Exception as e:
-        print(f"Failed to download image: {e}")
+        print(f"Download sequencing error: {e}")
         return False
 
 def main():
+    if not wait_for_perplexica():
+        return
+        
     history = load_history()
-    max_attempts = 5
+    max_attempts = 10
     
-    for attempt in range(max_attempts):
-        trend = fetch_trending_term()
-        if not trend:
-            print("Could not retrieve a trend. Retrying...")
+    for _ in range(max_attempts):
+        detected_trend = get_trends_from_engine()
+        if not detected_trend:
+            print("Engine returned empty indexing matrix. Retrying loop...")
+            time.sleep(2)
             continue
             
-        if trend in history:
-            print(f"'{trend}' already exists in history.txt. Searching for a new trend...")
+        if detected_trend in history:
+            print(f"Skipping duplicate context: '{detected_trend}'")
             continue
             
-        # If it's a new trend, attempt download
-        success = download_image(trend)
-        if success:
-            save_to_history(trend)
+        if download_trend_image(detected_trend):
+            save_to_history(detected_trend)
+            print("Successfully processed target workflow item.")
             break
     else:
-        print("Reached maximum attempts without finding a new unique trend.")
+        print("Completed processing loops. No new unique image sets were found today.")
 
 if __name__ == "__main__":
     main()
