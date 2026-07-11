@@ -164,7 +164,23 @@ jobs:
           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
           cd perplexica-core
           
-          # Force SearXNG inside Docker to completely disable its strict bot limits
+          # Force the container to expose the internal SearXNG network out to port 8888
+          # This edits the cloned docker-compose file on the fly to bypass connection blocks
+          cat << 'EOF' > patch_ports.py
+          import yaml
+          with open('docker-compose.yaml', 'r') as f:
+              data = yaml.safe_load(f)
+          
+          # Inject the explicit port routing maps to bypass local network limits
+          if 'services' in data and 'vane' in data['services']:
+              data['services']['vane']['ports'] = ['3000:3000', '8888:8080']
+          
+          with open('docker-compose.yaml', 'w') as f:
+              yaml.dump(data, f)
+          EOF
+          python patch_ports.py
+
+          # Disable SearXNG's bot detection entirely so GitHub Actions never gets blocked
           mkdir -p searxng
           cat << 'EOF' > searxng/settings.yml
           search:
@@ -190,10 +206,10 @@ jobs:
           URL = "http://localhost:8080"
           EOF
           
-          # Launch the altered local environment
+          # Start the container stack with the newly exposed network port maps
           docker compose up -d
-          echo "Overwritten architecture loaded successfully. Letting systems settle..."
-          sleep 20
+          echo "Network configurations patched. Allowing adapters to settle..."
+          sleep 30
 
       - name: Run Downloader Script
         run: python fetch_trends.py
