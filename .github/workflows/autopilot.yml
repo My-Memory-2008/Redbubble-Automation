@@ -159,31 +159,41 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Spin Up Local Perplexica Core
+      - name: Clone and Patch Perplexica Source Settings
         run: |
           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
           cd perplexica-core
           
-          # Perplexica's backend requires structural keys populated to pass initiation validation loops.
-          # We provide dummy placeholders so the core starts without crashing.
+          # Force SearXNG inside Docker to completely disable its strict bot limits
+          mkdir -p searxng
+          cat << 'EOF' > searxng/settings.yml
+          search:
+            formats:
+              - html
+              - json
+          bot_detection:
+            ip_limit:
+              link_token: false
+              block_ip: false
+          EOF
+
+          # Standardize system configuration variables
           cat << 'EOF' > config.toml
           [GENERAL]
           PORT = 3000
-          API_PORT = 3001
           ENV = "production"
           
           [API_KEYS]
-          OPENAI = "sk-placeholder-key-for-validation-purposes-only"
-          GROQ = ""
-          ANTHROPIC = ""
+          OPENAI = "mock-key"
           
           [SEARXNG]
-          URL = "http://searxng:8080" # Points to the internal docker network engine, not localhost
+          URL = "http://localhost:8080"
           EOF
           
-          # Fire up the bundled stack directly
+          # Launch the altered local environment
           docker compose up -d
-          echo "Docker compose container instances initializing successfully..."
+          echo "Overwritten architecture loaded successfully. Letting systems settle..."
+          sleep 20
 
       - name: Run Downloader Script
         run: python fetch_trends.py
