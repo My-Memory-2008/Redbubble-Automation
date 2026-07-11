@@ -106,8 +106,8 @@ jobs:
 
       - name: Spin Up Local Perplexica Core
         run: |
-          git clone https://github.com perplexica-core
-          cd perplexica-core
+          git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
+           cd perplexica-core
           
           # Inject clean environment files straight from the terminal
           cat << 'EOF' > config.toml
