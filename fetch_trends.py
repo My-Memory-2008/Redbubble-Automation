@@ -1,40 +1,15 @@
 import os
 import time
+import random
 import requests
-import subprocess
 from datetime import datetime
 
 HISTORY_FILE = "history.txt"
 IMAGE_FOLDER = "downloaded_images"
-LOCAL_PERPLEXICA_API = "http://localhost:3001/api/search"
+# Directly leveraging the unlimiter-patched SearXNG backend for rapid image parsing
+SEARXNG_API_URL = "http://localhost:8080/search"
 
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
-
-def wait_for_perplexica(timeout_seconds=180):
-    """Loops and validates if the Perplexica port is reachable, printing container stats if failing."""
-    print("Waiting for local Perplexica container map to stabilize...")
-    start_time = time.time()
-    
-    while time.time() - start_time < timeout_seconds:
-        try:
-            # Check if the API port interface is accepting network connection sockets
-            response = requests.get("http://localhost:3001/api/models", timeout=3)
-            if response.status_code < 500:
-                print("Perplexica API Engine is fully active and reachable!")
-                return True
-        except requests.exceptions.RequestException:
-            pass
-        time.sleep(5)
-        
-    print("\n❌ Timeout: Perplexica Core failed to respond on port 3001 within the window.")
-    print("--- Debugging Container System Status ---")
-    try:
-        # Diagnostic printing to catch compilation or startup loop crashes
-        print(subprocess.check_output("docker ps -a", shell=True).decode())
-        print(subprocess.check_output("docker compose -f perplexica-core/docker-compose.yaml logs --tail=20", shell=True).decode())
-    except Exception as debug_error:
-        print(f"Could not fetch container logs: {debug_error}")
-    return False
 
 def load_history():
     if not os.path.exists(HISTORY_FILE):
@@ -46,95 +21,76 @@ def save_to_history(search_term):
     with open(HISTORY_FILE, "a", encoding="utf-8") as f:
         f.write(f"{search_term}\n")
 
-def get_trends_from_engine():
-    """Queries the local search engine interface directly for trending keywords."""
-    prompt = "trending designs redbubble teepublic etsy amazon best sellers pinterest posters logos"
-    payload = {
-        "query": prompt,
-        "focusMode": "webSearch",
-        "optimizationMode": "speed",
-        "history": []
-    }
-    try:
-        res = requests.post(LOCAL_PERPLEXICA_API, json=payload, timeout=45)
-        if res.status_code == 200:
-            data = res.json()
-            sources = data.get("sources", [])
-            for source in sources:
-                title = source.get("title", "").strip()
-                if title and len(title.split()) > 2:
-                    return " ".join(title.split()[:4])
-        return None
-    except Exception as e:
-        print(f"Error querying search stack: {e}")
-        return None
+def get_target_trends():
+    """Generates varied platform queries targeting trending designs."""
+    platforms = ["redbubble", "etsy", "teepublic", "amazon best sellers", "pinterest trend"]
+    niches = ["retro logo design", "funny typography poster", "minimalist aesthetic graphic", "vintage vector art"]
+    
+    # Generate variations dynamically so you never query the exact same prompt structure
+    chosen_platform = random.choice(platforms)
+    chosen_niche = random.choice(niches)
+    return f"trending {chosen_platform} {chosen_niche}"
 
-def download_trend_image(keyword):
-    print(f"Attempting image resolution for: {keyword}")
-    payload = {
-        "query": f"{keyword} product photography layout reference design",
-        "focusMode": "webSearch",
-        "optimizationMode": "speed",
-        "history": []
-    }
-    try:
-        res = requests.post(LOCAL_PERPLEXICA_API, json=payload, timeout=45)
-        if res.status_code != 200:
-            return False
-            
-        sources = res.json().get("sources", [])
-        image_url = None
+def run_automation_workflow():
+    history = load_history()
+    max_pipeline_attempts = 5
+    
+    for _ in range(max_pipeline_attempts):
+        search_query = get_target_trends()
         
-        for src in sources:
-            url = src.get("url", "")
-            if any(url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
-                image_url = url
-                break
-                
-        if not image_url and sources:
-            # Fallback to the first available parsed link from the crawler context array
-            image_url = sources[0].get("url")
+        if search_query in history:
+            continue
             
-        if image_url:
-            print(f"Targeting download URL: {image_url}")
-            img_res = requests.get(image_url, stream=True, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
-            if img_res.status_code == 200:
-                clean_name = "".join(c for c in keyword if c.isalnum() or c in (' ', '_')).rstrip()
-                filename = f"{IMAGE_FOLDER}/{clean_name.replace(' ', '_')}_{int(time.time())}.jpg"
-                with open(filename, 'wb') as f:
-                    for chunk in img_res.iter_content(1024):
-                        f.write(chunk)
-                print(f"Successfully processed image file: {filename}")
-                return True
-        return False
-    except Exception as e:
-        print(f"Image saving sequence interrupted: {e}")
-        return False
+        print(f"Querying search layer for: '{search_query}'")
+        
+        # We explicitly request image engine schemas to bring back direct image links
+        params = {
+            "q": search_query,
+            "format": "json",
+            "categories": "images"
+        }
+        
+        try:
+            response = requests.get(SEARXNG_API_URL, params=params, timeout=20)
+            if response.status_code != 200:
+                print(f"Search indexer rejected query (Status {response.status_code}). Retrying next matrix...")
+                continue
+                
+            results = response.json().get("results", [])
+            if not results:
+                print("No active images found for this niche selection. Advancing loop...")
+                continue
+                
+            # Grab a valid image resource candidate
+            for image_metadata in results:
+                image_url = image_metadata.get("img_src") or image_metadata.get("url")
+                
+                if image_url and any(image_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                    print(f"Found reference asset candidate: {image_url}")
+                    
+                    # Stream and save the file safely
+                    img_response = requests.get(image_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+                    if img_response.status_code == 200:
+                        clean_title = "".join(c for c in search_query if c.isalnum() or c in (' ', '_')).rstrip()
+                        filename = f"{IMAGE_FOLDER}/{clean_title.replace(' ', '_')}_{int(time.time())}.jpg"
+                        
+                        with open(filename, 'wb') as file_handler:
+                            file_handler.write(img_response.content)
+                            
+                        save_to_history(search_query)
+                        print(f"Successfully processed and committed reference image: {filename}")
+                        return True
+                        
+        except Exception as error:
+            print(f"Skipping volatile loop point: {error}")
+            time.sleep(2)
+            
+    print("Automation loop exhausted without downloading a new unique asset today.")
+    return False
 
 def main():
-    if not wait_for_perplexica():
-        return
-        
-    history = load_history()
-    max_attempts = 5
-    
-    for _ in range(max_attempts):
-        detected_trend = get_trends_from_engine()
-        if not detected_trend:
-            print("Engine returned empty matrix. Retrying sequence...")
-            time.sleep(5)
-            continue
-            
-        if detected_trend in history:
-            print(f"Skipping known trend: '{detected_trend}'")
-            continue
-            
-        if download_trend_image(detected_trend):
-            save_to_history(detected_trend)
-            print("Workflow run completed successfully.")
-            break
-    else:
-        print("Workflow completed processing iterations. No new unique designs resolved.")
+    print("Initializing customized scraping routine...")
+    run_automation_workflow()
 
 if __name__ == "__main__":
     main()
