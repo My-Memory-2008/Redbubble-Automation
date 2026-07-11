@@ -164,23 +164,10 @@ jobs:
           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
           cd perplexica-core
           
-          # Force the container to expose the internal SearXNG network out to port 8888
-          # This edits the cloned docker-compose file on the fly to bypass connection blocks
-          cat << 'EOF' > patch_ports.py
-          import yaml
-          with open('docker-compose.yaml', 'r') as f:
-              data = yaml.safe_load(f)
-          
-          # Inject the explicit port routing maps to bypass local network limits
-          if 'services' in data and 'vane' in data['services']:
-              data['services']['vane']['ports'] = ['3000:3000', '8888:8080']
-          
-          with open('docker-compose.yaml', 'w') as f:
-              yaml.dump(data, f)
-          EOF
-          python patch_ports.py
+          # Inject port mappings directly into docker-compose using built-in linux tools
+          sed -i '/- "3000:3000"/a \      - "8888:8080"' docker-compose.yaml
 
-          # Disable SearXNG's bot detection entirely so GitHub Actions never gets blocked
+          # Disable SearXNG's bot detection limits entirely so it doesn't block GitHub's IP
           mkdir -p searxng
           cat << 'EOF' > searxng/settings.yml
           search:
@@ -193,7 +180,7 @@ jobs:
               block_ip: false
           EOF
 
-          # Standardize system configuration variables
+          # Standardize system config settings
           cat << 'EOF' > config.toml
           [GENERAL]
           PORT = 3000
@@ -206,9 +193,9 @@ jobs:
           URL = "http://localhost:8080"
           EOF
           
-          # Start the container stack with the newly exposed network port maps
+          # Launch the altered local environment
           docker compose up -d
-          echo "Network configurations patched. Allowing adapters to settle..."
+          echo "Network configurations patched. Allowing containers to settle..."
           sleep 30
 
       - name: Run Downloader Script
