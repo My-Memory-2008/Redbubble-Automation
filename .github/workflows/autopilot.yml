@@ -139,7 +139,8 @@
 name: Local Perplexica Trend Downloader
 
 on:
-  
+  schedule:
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
@@ -159,15 +160,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Clone and Patch Perplexica Source Settings
+      - name: Launch Standalone Search Engine Gateway
         run: |
-          git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
-          cd perplexica-core
-          
-          # Inject port mappings directly into docker-compose using built-in linux tools
-          sed -i '/- "3000:3000"/a \      - "8888:8080"' docker-compose.yaml
-
-          # Disable SearXNG's bot detection limits entirely so it doesn't block GitHub's IP
           mkdir -p searxng
           cat << 'EOF' > searxng/settings.yml
           search:
@@ -180,30 +174,20 @@ jobs:
               block_ip: false
           EOF
 
-          # Standardize system config settings
-          cat << 'EOF' > config.toml
-          [GENERAL]
-          PORT = 3000
-          ENV = "production"
-          
-          [API_KEYS]
-          OPENAI = "mock-key"
-          
-          [SEARXNG]
-          URL = "http://localhost:8080"
-          EOF
-          
-          # Launch the altered local environment
-          docker compose up -d
-          echo "Network configurations patched. Allowing containers to settle..."
-          sleep 30
+          docker run -d -p 8080:8080 --name independent-searxng \
+            -v $(pwd)/searxng:/etc/searxng \
+            searxng/searxng:latest
+            
+          echo "Engine containers deployed. Allowing operational adapters to settle..."
+          sleep 15
 
       - name: Run Downloader Script
         run: python fetch_trends.py
 
-      - name: Commit and Push Changes
+      - name: Commit and Push Overwritten Changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-          git add history.txt downloaded_images/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-download: New trend image added" && git push)
+          git add history.txt downloaded_images/current_trend.jpg
+          # This forces a push if history.txt or the content of the image changes
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Overwrote trend reference image" && git push)
