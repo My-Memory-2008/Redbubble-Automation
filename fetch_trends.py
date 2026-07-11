@@ -1,19 +1,13 @@
 import os
+import re
 import time
 import random
 import requests
+import urllib.parse
 
 HISTORY_FILE = "history.txt"
 IMAGE_FOLDER = "downloaded_images"
 OUTPUT_FILENAME = f"{IMAGE_FOLDER}/current_trend.jpg"
-
-# Pool of public SearXNG instances that support clean, raw extraction
-SEARXNG_POOL = [
-    "https://searx.be",
-    "https://ononoki.org",
-    "https://baresearch.org",
-    "https://priv.au"
-]
 
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
 
@@ -28,22 +22,22 @@ def save_to_history(search_term):
         f.write(f"{search_term}\n")
 
 def get_target_trends():
-    # Targets all printing design platforms in your prompt
+    # Covers every source platform requested in your blueprint
     platforms = [
         "redbubble trending", 
         "etsy best sellers art", 
         "teepublic trends", 
         "amazon best sellers pod", 
         "pinterest aesthetic trend", 
-        "insightfactory pod design", 
-        "kitto vector graphic"
+        "insightfactory pod", 
+        "kitto graphic design"
     ]
     niches = [
         "retro typography logo", 
-        "funny viral poster", 
+        "funny viral poster design", 
         "minimalist line art aesthetic", 
-        "vintage vector layout", 
-        "90s bootleg rap tee",
+        "vintage vector graphic", 
+        "90s bootleg rap tee layout",
         "cottagecore aesthetic pattern"
     ]
     return f"{random.choice(platforms)} {random.choice(niches)}"
@@ -52,8 +46,9 @@ def run_automation_workflow():
     history = load_history()
     max_pipeline_attempts = 10
     
+    # Using an Android Mobile user agent forces Google to serve basic, unblocked lightweight HTML layouts
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
     }
 
     for attempt in range(max_pipeline_attempts):
@@ -62,57 +57,58 @@ def run_automation_workflow():
         if search_query in history:
             continue
             
-        # Pick a random gateway instance from the reliable pool to disperse traffic
-        current_gateway = random.choice(SEARXNG_POOL)
-        print(f"[{attempt + 1}/{max_pipeline_attempts}] Querying node {current_gateway} for: '{search_query}'")
+        print(f"[{attempt + 1}/{max_pipeline_attempts}] Querying Unblocked Core Engine for: '{search_query}'")
         
-        params = {
-            "q": search_query,
-            "format": "json",
-            "categories": "images",
-            "safesearch": "1"
-        }
+        # Build an authentic Google Mobile Image search parameter string
+        encoded_query = urllib.parse.quote_plus(search_query)
+        google_url = f"https://google.com{encoded_query}&tbm=isch&asearch=ichunk&async=_id:rg_s,_pms:s,_fmt:pc"
         
         try:
-            response = requests.get(current_gateway, params=params, headers=headers, timeout=20)
+            response = requests.get(google_url, headers=headers, timeout=15)
+            if response.status_code != 200:
+                print(f"Engine busy (Status {response.status_code}). Advancing loop...")
+                continue
+                
+            # Isolate direct image links out of the raw response layout strings
+            html_content = response.text
+            raw_links = re.findall(r'imgurl=(.*?)(?:&amp;|\")', html_content)
             
-            # If a public node throttles or sends a bad response, jump to the next one instantly
-            if response.status_code != 200 or "results" not in response.text:
-                print("Node busy or returned an empty response stack. Swapping target route...")
+            valid_urls = []
+            for url in raw_links:
+                decoded_url = urllib.parse.unquote(url)
+                if decoded_url.startswith("http") and any(decoded_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                    valid_urls.append(decoded_url)
+            
+            if not valid_urls:
+                print("No clear design image extensions located in this canvas layer. Retrying...")
                 continue
                 
-            results = response.json().get("results", [])
-            if not results:
-                print("No active images located in this canvas slice. Advancing loop...")
-                continue
-                
-            for image_metadata in results:
-                image_url = image_metadata.get("img_src") or image_metadata.get("url")
-                
-                # Check for direct file signatures
-                if image_url and any(image_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
-                    print(f"Found active reference design link: {image_url}")
+            # Take the highest ranking search item link matched by the aggregator
+            target_image_url = valid_urls[0]
+            print(f"Isolating trending design asset: {target_image_url}")
+            
+            # Download the actual image file bytes using standard browser emulation
+            browser_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            img_response = requests.get(target_image_url, timeout=12, headers=browser_headers)
+            
+            if img_response.status_code == 200:
+                # Overwrites the target file instantly
+                with open(OUTPUT_FILENAME, 'wb') as file_handler:
+                    file_handler.write(img_response.content)
                     
-                    img_response = requests.get(image_url, timeout=12, headers=headers)
-                    if img_response.status_code == 200:
-                        
-                        # Overwrites 'current_trend.jpg' cleanly every single run
-                        with open(OUTPUT_FILENAME, 'wb') as file_handler:
-                            file_handler.write(img_response.content)
-                            
-                        save_to_history(search_query)
-                        print(f"🎯 Overwrite Operation Complete! Reference file saved: {OUTPUT_FILENAME}")
-                        return True
-                        
+                save_to_history(search_query)
+                print(f"🎯 Success! Downloaded and overwrote asset: {OUTPUT_FILENAME}")
+                return True
+                
         except Exception as error:
-            print(f"Skipping volatile gateway connection point: {error}")
+            print(f"Skipping unstable network target coordinate: {error}")
             time.sleep(2)
             
     print("Automation array exhausted without matching unique content loops today.")
     return False
 
 def main():
-    print("Initializing SearXNG aggregate crawling matrix...")
+    print("Initializing high-availability scraping matrix...")
     run_automation_workflow()
 
 if __name__ == "__main__":
