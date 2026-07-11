@@ -6,8 +6,8 @@ from datetime import datetime
 
 HISTORY_FILE = "history.txt"
 IMAGE_FOLDER = "downloaded_images"
-# Directly leveraging the unlimiter-patched SearXNG backend for rapid image parsing
-SEARXNG_API_URL = "http://localhost:8080/search"
+# Targeting the newly exposed backend gateway port
+SEARXNG_API_URL = "http://localhost:8888/search"
 
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
 
@@ -22,14 +22,9 @@ def save_to_history(search_term):
         f.write(f"{search_term}\n")
 
 def get_target_trends():
-    """Generates varied platform queries targeting trending designs."""
     platforms = ["redbubble", "etsy", "teepublic", "amazon best sellers", "pinterest trend"]
     niches = ["retro logo design", "funny typography poster", "minimalist aesthetic graphic", "vintage vector art"]
-    
-    # Generate variations dynamically so you never query the exact same prompt structure
-    chosen_platform = random.choice(platforms)
-    chosen_niche = random.choice(niches)
-    return f"trending {chosen_platform} {chosen_niche}"
+    return f"trending {random.choice(platforms)} {random.choice(niches)}"
 
 def run_automation_workflow():
     history = load_history()
@@ -41,9 +36,8 @@ def run_automation_workflow():
         if search_query in history:
             continue
             
-        print(f"Querying search layer for: '{search_query}'")
+        print(f"Querying unblocked engine gateway for: '{search_query}'")
         
-        # We explicitly request image engine schemas to bring back direct image links
         params = {
             "q": search_query,
             "format": "json",
@@ -53,22 +47,21 @@ def run_automation_workflow():
         try:
             response = requests.get(SEARXNG_API_URL, params=params, timeout=20)
             if response.status_code != 200:
-                print(f"Search indexer rejected query (Status {response.status_code}). Retrying next matrix...")
+                print(f"Search indexer rejected query (Status {response.status_code}). Advancing loop...")
                 continue
                 
             results = response.json().get("results", [])
             if not results:
-                print("No active images found for this niche selection. Advancing loop...")
+                print("No active images found for this category niche. Retrying...")
                 continue
                 
-            # Grab a valid image resource candidate
+            # Iterate through the returned raw image URLs from the query loop
             for image_metadata in results:
                 image_url = image_metadata.get("img_src") or image_metadata.get("url")
                 
                 if image_url and any(image_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
-                    print(f"Found reference asset candidate: {image_url}")
+                    print(f"Discovered matching design image: {image_url}")
                     
-                    # Stream and save the file safely
                     img_response = requests.get(image_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
                     if img_response.status_code == 200:
                         clean_title = "".join(c for c in search_query if c.isalnum() or c in (' ', '_')).rstrip()
@@ -78,14 +71,14 @@ def run_automation_workflow():
                             file_handler.write(img_response.content)
                             
                         save_to_history(search_query)
-                        print(f"Successfully processed and committed reference image: {filename}")
+                        print(f"Successfully downloaded asset to: {filename}")
                         return True
                         
         except Exception as error:
             print(f"Skipping volatile loop point: {error}")
             time.sleep(2)
             
-    print("Automation loop exhausted without downloading a new unique asset today.")
+    print("Automation loop exhausted without tracking any new content today.")
     return False
 
 def main():
