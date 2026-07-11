@@ -2,11 +2,13 @@ import os
 import time
 import random
 import requests
-from duckduckgo_search import DDGS
 
 HISTORY_FILE = "history.txt"
 IMAGE_FOLDER = "downloaded_images"
 OUTPUT_FILENAME = f"{IMAGE_FOLDER}/current_trend.jpg"
+
+# Querying a high-availability public SearXNG instance pool to bypass data center blocks
+SEARXNG_API_URL = "https://ononoki.org"
 
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
 
@@ -21,60 +23,91 @@ def save_to_history(search_term):
         f.write(f"{search_term}\n")
 
 def get_target_trends():
-    # Covers every source platform you requested
-    platforms = ["redbubble", "etsy", "teepublic", "amazon best sellers", "pinterest trend", "insightfactory", "kitto"]
-    niches = ["retro logo design", "funny typography poster", "minimalist aesthetic graphic", "vintage vector art", "trending design layout"]
-    return f"trending {random.choice(platforms)} {random.choice(niches)}"
+    # Covers every target source platform specified in your blueprint
+    platforms = [
+        "redbubble trending", 
+        "etsy best sellers", 
+        "teepublic trends", 
+        "amazon best sellers pod", 
+        "pinterest design trends", 
+        "insightfactory pod", 
+        "kitto graphic"
+    ]
+    niches = [
+        "retro typography logo", 
+        "funny viral poster design", 
+        "minimalist line art aesthetic", 
+        "vintage vector graphic", 
+        "90s bootleg rap tee layout",
+        "cottagecore aesthetic pattern"
+    ]
+    return f"{random.choice(platforms)} {random.choice(niches)}"
 
 def run_automation_workflow():
     history = load_history()
     max_pipeline_attempts = 10
     
-    # Initialize the high-speed search extraction matrix
-    with DDGS() as ddgs:
-        for _ in range(max_pipeline_attempts):
-            search_query = get_target_trends()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    for attempt in range(max_pipeline_attempts):
+        search_query = get_target_trends()
+        
+        if search_query in history:
+            continue
             
-            if search_query in history:
+        print(f"[{attempt + 1}/10] Querying SearXNG Meta-Engine for: '{search_query}'")
+        
+        # Structure the query to fetch json metadata from SearXNG's image category engines
+        params = {
+            "q": search_query,
+            "format": "json",
+            "categories": "images",
+            "safesearch": "1",
+            "language": "en"
+        }
+        
+        try:
+            response = requests.get(SEARXNG_API_URL, params=params, headers=headers, timeout=25)
+            if response.status_code != 200:
+                print(f"SearXNG gateway busy (Status {response.status_code}). Trying next variant...")
                 continue
                 
-            print(f"Querying unblocked engine matrix for: '{search_query}'")
-            
-            try:
-                # Direct image extraction targeting active layouts
-                results = list(ddgs.images(search_query, max_results=10))
-                if not results:
-                    print("No image data found for this keyword phrase. Advancing loop...")
-                    continue
-                    
-                for image_metadata in results:
-                    image_url = image_metadata.get("image")
-                    
-                    if image_url and any(image_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
-                        print(f"Discovered matching production reference asset: {image_url}")
-                        
-                        # Request the actual image bytes using standard browser impersonation
-                        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-                        img_response = requests.get(image_url, timeout=15, headers=headers)
-                        
-                        if img_response.status_code == 200:
-                            # Overwrites the target file instantly
-                            with open(OUTPUT_FILENAME, 'wb') as file_handler:
-                                file_handler.write(img_response.content)
-                                
-                            save_to_history(search_query)
-                            print(f"Successfully downloaded and overwrote trend file: {OUTPUT_FILENAME}")
-                            return True
-                            
-            except Exception as error:
-                print(f"Skipping volatile network point: {error}")
-                time.sleep(2)
+            results = response.json().get("results", [])
+            if not results:
+                print("No image data returned from meta-scrapers for this niche. Advancing loop...")
+                continue
                 
-    print("Automation loop exhausted without tracking any new content today.")
+            # Iterate through the gathered engine image arrays
+            for image_metadata in results:
+                image_url = image_metadata.get("img_src") or image_metadata.get("url")
+                
+                # Verify we are targeting direct design assets
+                if image_url and any(image_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                    print(f"Found active reference design link: {image_url}")
+                    
+                    # Stream down the image bytes
+                    img_response = requests.get(image_url, timeout=15, headers=headers)
+                    if img_response.status_code == 200:
+                        
+                        # Overwrites 'current_trend.jpg' instantly on every successful loop run
+                        with open(OUTPUT_FILENAME, 'wb') as file_handler:
+                            file_handler.write(img_response.content)
+                            
+                        save_to_history(search_query)
+                        print(f"🎯 Success! Downloaded and overwrote asset: {OUTPUT_FILENAME}")
+                        return True
+                        
+        except Exception as error:
+            print(f"Skipping volatile gateway pipeline link: {error}")
+            time.sleep(2)
+            
+    print("Automation loop finished. No new unique trend targets resolved today.")
     return False
 
 def main():
-    print("Initializing isolated scraper workflow...")
+    print("Initializing SearXNG aggregate scraping matrix...")
     run_automation_workflow()
 
 if __name__ == "__main__":
