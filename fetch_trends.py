@@ -1,5 +1,4 @@
 import os
-import re
 import time
 import random
 import requests
@@ -8,8 +7,13 @@ HISTORY_FILE = "history.txt"
 IMAGE_FOLDER = "downloaded_images"
 OUTPUT_FILENAME = f"{IMAGE_FOLDER}/current_trend.jpg"
 
-# Targeting the core internal web server gateway
-SEARXNG_URL = "http://127.0.0"
+# Pool of public SearXNG instances that support clean, raw extraction
+SEARXNG_POOL = [
+    "https://searx.be",
+    "https://ononoki.org",
+    "https://baresearch.org",
+    "https://priv.au"
+]
 
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
 
@@ -24,23 +28,23 @@ def save_to_history(search_term):
         f.write(f"{search_term}\n")
 
 def get_target_trends():
-    # Covers every requested source platform from your operational layout blueprint
+    # Targets all printing design platforms in your prompt
     platforms = [
-        "redbubble trending design", 
+        "redbubble trending", 
         "etsy best sellers art", 
-        "teepublic top trends", 
+        "teepublic trends", 
         "amazon best sellers pod", 
         "pinterest aesthetic trend", 
-        "insightfactory pod graphic", 
-        "kitto vector design"
+        "insightfactory pod design", 
+        "kitto vector graphic"
     ]
     niches = [
         "retro typography logo", 
         "funny viral poster", 
-        "minimalist line art graphic", 
+        "minimalist line art aesthetic", 
         "vintage vector layout", 
-        "90s bootleg rap tee pattern",
-        "cottagecore graphic aesthetic"
+        "90s bootleg rap tee",
+        "cottagecore aesthetic pattern"
     ]
     return f"{random.choice(platforms)} {random.choice(niches)}"
 
@@ -58,54 +62,50 @@ def run_automation_workflow():
         if search_query in history:
             continue
             
-        print(f"[{attempt + 1}/{max_pipeline_attempts}] Scanning SearXNG Core Grid for: '{search_query}'")
+        # Pick a random gateway instance from the reliable pool to disperse traffic
+        current_gateway = random.choice(SEARXNG_POOL)
+        print(f"[{attempt + 1}/{max_pipeline_attempts}] Querying node {current_gateway} for: '{search_query}'")
         
-        # Pulling the raw unblocked structural html engine view to bypass JSON blocks completely
         params = {
             "q": search_query,
+            "format": "json",
             "categories": "images",
             "safesearch": "1"
         }
         
         try:
-            response = requests.get(SEARXNG_URL, params=params, headers=headers, timeout=25)
-            if response.status_code != 200:
-                print(f"SearXNG local core busy (Status {response.status_code}). Advancing loop...")
-                continue
+            response = requests.get(current_gateway, params=params, headers=headers, timeout=20)
             
-            # Use string parsing patterns to isolate design asset links from SearXNG image elements
-            html_content = response.text
-            image_urls = re.findall(r'src="([^"]+)"', html_content)
-            image_urls += re.findall(r'href="([^"]+\.(?:jpg|jpeg|png|webp))"', html_content, re.IGNORECASE)
-            
-            # Clean and filter image matches
-            valid_urls = []
-            for url in image_urls:
-                if "proxy" in url or "searxng" in url:
-                    continue
-                if any(url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
-                    valid_urls.append(url)
-
-            if not valid_urls:
-                print("No unique asset markers located in current engine layout canvas. Retrying...")
+            # If a public node throttles or sends a bad response, jump to the next one instantly
+            if response.status_code != 200 or "results" not in response.text:
+                print("Node busy or returned an empty response stack. Swapping target route...")
                 continue
                 
-            # Target the topmost matching design asset returned by the multi-engine aggregator
-            target_image_url = valid_urls[0]
-            print(f"Isolating trending design item asset link: {target_image_url}")
-            
-            img_response = requests.get(target_image_url, timeout=15, headers=headers)
-            if img_response.status_code == 200:
-                # Instantly overwrites the target file to prevent repository bloat
-                with open(OUTPUT_FILENAME, 'wb') as file_handler:
-                    file_handler.write(img_response.content)
+            results = response.json().get("results", [])
+            if not results:
+                print("No active images located in this canvas slice. Advancing loop...")
+                continue
+                
+            for image_metadata in results:
+                image_url = image_metadata.get("img_src") or image_metadata.get("url")
+                
+                # Check for direct file signatures
+                if image_url and any(image_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                    print(f"Found active reference design link: {image_url}")
                     
-                save_to_history(search_query)
-                print(f"🎯 Overwrite Operation Complete! Saved reference file: {OUTPUT_FILENAME}")
-                return True
+                    img_response = requests.get(image_url, timeout=12, headers=headers)
+                    if img_response.status_code == 200:
+                        
+                        # Overwrites 'current_trend.jpg' cleanly every single run
+                        with open(OUTPUT_FILENAME, 'wb') as file_handler:
+                            file_handler.write(img_response.content)
+                            
+                        save_to_history(search_query)
+                        print(f"🎯 Overwrite Operation Complete! Reference file saved: {OUTPUT_FILENAME}")
+                        return True
                         
         except Exception as error:
-            print(f"Skipping volatile extraction coordinate: {error}")
+            print(f"Skipping volatile gateway connection point: {error}")
             time.sleep(2)
             
     print("Automation array exhausted without matching unique content loops today.")
