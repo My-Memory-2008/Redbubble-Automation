@@ -78,38 +78,100 @@
 
 
 
-name: Perplexica Unique Trend Discovery
+# name: Perplexica Unique Trend Discovery
+
+# on:
+#  workflow_dispatch:     # Allows you to click "Run workflow" to test it manually
+
+# jobs:
+#   discover-trends:
+#     runs-on: ubuntu-latest
+    
+#     permissions:
+#       contents: write
+
+#     steps:
+#       - name: Checkout Code Repository
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+
+#       - name: Set up Python Environment
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.10'
+
+#       - name: Install Network Requirements
+#         run: pip install requests
+
+#       - name: Spin Up Local Perplexica Core
+#         run: |
+#           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
+#            cd perplexica-core
+          
+#           # Inject configurations ensuring accurate port exposure mappings
+#           cat << 'EOF' > config.toml
+#           [GENERAL]
+#           PORT = 3000
+#           API_PORT = 3001
+#           ENV = "production"
+          
+#           [SEARXNG]
+#           URL = "http://localhost:8080"
+#           EOF
+          
+#           docker compose up -d
+#           echo "Docker container maps initialized. Handing execution over to python verification loops..."
+
+#       - name: Run Dynamic Trend Search Agent
+#         run: python search_agent.py
+
+#       - name: Push History Logs to Repository Branch
+#         run: |
+#           git config --global user.name "github-actions[bot]"
+#           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+#           git add history.txt
+#           git diff-index --quiet HEAD || git commit -m "Sync Loop: Saved brand new trending topic parameters"
+#           git push origin main
+
+
+
+name: Local Perplexica Trend Downloader
 
 on:
- workflow_dispatch:     # Allows you to click "Run workflow" to test it manually
+  schedule:
+    - cron: '0 0 * * *' # Runs daily at midnight
+  workflow_dispatch: # Allows manual trigger
 
 jobs:
-  discover-trends:
+  run-bot:
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout Code Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Python Environment
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Network Requirements
-        run: pip install requests
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
 
+      - name: Start SearXNG (Required Backend Dependency)
+        run: |
+          docker run -d -p 8080:8080 --name searxng \
+            -v ${{ github.workspace }}/searxng:/etc/searxng \
+            searxng/searxng:latest
+          
       - name: Spin Up Local Perplexica Core
         run: |
           git clone https://github.com/ItzCrazyKns/Perplexica.git perplexica-core
-           cd perplexica-core
+          cd perplexica-core
           
-          # Inject configurations ensuring accurate port exposure mappings
+          # Inject production configurations
           cat << 'EOF' > config.toml
           [GENERAL]
           PORT = 3000
@@ -118,18 +180,22 @@ jobs:
           
           [SEARXNG]
           URL = "http://localhost:8080"
+          
+          # Note: Perplexica requires an LLM to route intents. 
+          # We fall back to standard web search if APIs are blank.
+          [API_KEYS]
+          OPENAI = "" 
           EOF
           
           docker compose up -d
           echo "Docker container maps initialized. Handing execution over to python verification loops..."
 
-      - name: Run Dynamic Trend Search Agent
-        run: python search_agent.py
+      - name: Run Downloader Script
+        run: python fetch_trends.py
 
-      - name: Push History Logs to Repository Branch
+      - name: Commit and Push Changes
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add history.txt
-          git diff-index --quiet HEAD || git commit -m "Sync Loop: Saved brand new trending topic parameters"
-          git push origin main
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Bot"
+          git add history.txt downloaded_images/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-download: New trend image added" && git push)
