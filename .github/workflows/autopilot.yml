@@ -157,7 +157,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests duckduckgo_search
+          pip install requests
 
       - name: Run Downloader Script
         run: python fetch_trends.py
